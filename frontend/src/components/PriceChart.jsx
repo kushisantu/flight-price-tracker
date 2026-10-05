@@ -23,8 +23,8 @@ export default function PriceChart({ history, target, height = 240 }) {
     {
       label: "Cheapest fare",
       data: prices,
-      borderColor: "#1a73e8",
-      backgroundColor: "rgba(26, 115, 232, 0.12)",
+      borderColor: "#e4a15a",
+      backgroundColor: "rgba(228, 161, 90, 0.16)",
       fill: true,
       tension: 0.35,
       pointRadius: 0,
@@ -34,7 +34,7 @@ export default function PriceChart({ history, target, height = 240 }) {
     {
       label: "Average",
       data: prices.map(() => average),
-      borderColor: "#9aa3af",
+      borderColor: "#6d7b8d",
       borderDash: [5, 4],
       pointRadius: 0,
       fill: false,
@@ -45,7 +45,7 @@ export default function PriceChart({ history, target, height = 240 }) {
     datasets.push({
       label: "Your target",
       data: prices.map(() => target),
-      borderColor: "#0f7b3a",
+      borderColor: "#5ee0b5",
       borderDash: [2, 3],
       pointRadius: 0,
       fill: false,
@@ -72,12 +72,12 @@ export default function PriceChart({ history, target, height = 240 }) {
           scales: {
             x: {
               grid: { display: false },
-              ticks: { maxTicksLimit: 6, color: "#5c6775" },
+              ticks: { maxTicksLimit: 6, color: "#93a0b3" },
             },
             y: {
-              grid: { color: "#eef2f6" },
+              grid: { color: "#2c3646" },
               ticks: {
-                color: "#5c6775",
+                color: "#93a0b3",
                 callback: (value) => `$${value}`,
               },
             },
