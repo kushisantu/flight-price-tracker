@@ -12,7 +12,7 @@ from app.config import SQLITE_PATH, settings
 
 logger = logging.getLogger(__name__)
 
-SEED_VERSION = "1"
+SEED_VERSION = "2"
 SEED_ROUTES = [
     ("NYC", "LON", 36, 7),
     ("SFO", "TYO", 42, 10),

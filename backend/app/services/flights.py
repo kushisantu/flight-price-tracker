@@ -1,8 +1,9 @@
 """Sample fare engine.
 
-Prices are modeled from distance, season, weekday, cabin, and how far ahead
-you look. The same inputs always return the same fare, so charts and alerts
-stay stable. Swap this module for a live provider such as Amadeus later.
+Prices come from a seeded market simulator. Distance, season, weekday, cabin,
+and how far ahead you look set a base fare, and a hidden demand path moves it.
+The same inputs always return the same fare, so charts and alerts stay stable.
+Swap this module for a live provider later.
 """
 
 from __future__ import annotations
@@ -299,26 +300,21 @@ def _unit_fare(
     cabin: str,
     depart_iso: str,
     observed_iso: str,
+    passengers: int = 1,
 ) -> int:
-    origin = AIRPORTS[origin_code]
-    dest = AIRPORTS[dest_code]
-    depart = date.fromisoformat(depart_iso)
-    observed = date.fromisoformat(observed_iso)
-    days_out = (depart - observed).days
-    km = distance_km(origin, dest)
-    wave_phase = int(_hash_unit(origin_code, dest_code, "wave") * 20)
-    wave = 1 + 0.045 * math.sin((observed.toordinal() + wave_phase) / 7.5)
-    noise = 0.985 + 0.03 * _hash_unit(origin_code, dest_code, airline_code, observed_iso, str(stops))
-    raw = (42 + km * 0.052)
-    raw *= _market(origin, dest, km)
-    raw *= AIRLINES[airline_code]["factor"]
-    raw *= 1.16 if stops == 0 else 1.0
-    raw *= CABINS[cabin]
-    raw *= _advance(max(0, days_out))
-    raw *= _season(depart)
-    raw *= DOW[depart.weekday()]
-    raw *= wave * noise
-    return max(49, int(round(raw)))
+    from app.services.simulator import DEFAULT_SEED, fare_on
+
+    return fare_on(
+        origin_code,
+        dest_code,
+        airline_code,
+        stops,
+        cabin,
+        date.fromisoformat(depart_iso),
+        date.fromisoformat(observed_iso),
+        passengers,
+        DEFAULT_SEED,
+    )
 
 
 def _leg(
@@ -398,7 +394,7 @@ def _candidates(query: TripQuery) -> list[dict]:
                     legs = [outbound]
                     price = _unit_fare(
                         origin["code"], dest["code"], airline["code"], stops, query.cabin,
-                        query.depart.isoformat(), observed,
+                        query.depart.isoformat(), observed, query.passengers,
                     )
                     if query.ret:
                         back_slot = (slot + 1) % 3
@@ -408,7 +404,7 @@ def _candidates(query: TripQuery) -> list[dict]:
                         legs.append(inbound)
                         price += _unit_fare(
                             dest["code"], origin["code"], airline["code"], stops, query.cabin,
-                            query.ret.isoformat(), observed,
+                            query.ret.isoformat(), observed, query.passengers,
                         )
                     flights.append({
                         "id": f"{origin['code']}-{dest['code']}-{query.depart.isoformat()}-{airline['code']}-{stops}-{slot}-{query.cabin}",
@@ -510,12 +506,12 @@ def quote_parts(query: TripQuery, airline_code: str | None = None, stops: int | 
                         continue
                     price = _unit_fare(
                         origin["code"], dest["code"], code, stop_count, query.cabin,
-                        query.depart.isoformat(), observed,
+                        query.depart.isoformat(), observed, query.passengers,
                     )
                     if query.ret:
                         price += _unit_fare(
                             dest["code"], origin["code"], code, stop_count, query.cabin,
-                            query.ret.isoformat(), observed,
+                            query.ret.isoformat(), observed, query.passengers,
                         )
                     if best is None or price < best[0] or (price == best[0] and stop_count < best[2]):
                         best = (price, code, stop_count)
