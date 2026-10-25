@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { formatLong, money } from "../format";
+import FareBand from "./FareBand";
 import PriceChart from "./PriceChart";
 import SearchForm from "./SearchForm";
 
@@ -121,7 +122,7 @@ export default function Explore({ criteria, onChange, onSearch, busy, onSmart })
             <p>{criteria.origin.city} to {criteria.destination.city}</p>
           </div>
           <PriceChart history={outlook?.history} />
-          <p className="fine">Cheapest modeled fare for these dates over the last 90 days. The dashed line is the average.</p>
+          <p className="fine">Sample fare for these dates over the last 90 days, not a DOT ticket. The dashed line is the average.</p>
         </div>
         <aside className={`insight ${insight?.level || ""}`}>
           {insight ? (
@@ -130,6 +131,7 @@ export default function Explore({ criteria, onChange, onSearch, busy, onSmart })
               <h2>{insight.title}</h2>
               <p>{insight.summary}</p>
               <p>{insight.advice}</p>
+              <p className="fine">Book or wait follows the sample fare path, not DOT tickets.</p>
               {insight.alternative && (
                 <button
                   type="button"
@@ -149,6 +151,8 @@ export default function Explore({ criteria, onChange, onSearch, busy, onSmart })
           )}
         </aside>
       </section>
+
+      <FareBand origin={criteria.origin?.code} destination={criteria.destination?.code} />
 
       <section>
         <div className="panel-head">

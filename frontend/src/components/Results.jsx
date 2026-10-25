@@ -13,6 +13,7 @@ import {
   shiftMonth,
   todayISO,
 } from "../format";
+import FareBand from "./FareBand";
 import PriceChart from "./PriceChart";
 import SearchForm from "./SearchForm";
 
@@ -270,6 +271,7 @@ export default function Results({
                 <p className="level">{insight.title}</p>
                 <p>{insight.summary}</p>
                 <p>{insight.advice}</p>
+                <p className="fine">Book or wait follows the sample fare path, not DOT tickets.</p>
               </div>
               {insight.alternative && (
                 <button
@@ -286,10 +288,12 @@ export default function Results({
             </section>
           )}
 
+          <FareBand origin={criteria.origin?.code} destination={criteria.destination?.code} />
+
           <section className="panel history-panel">
             <div className="panel-head">
               <h2>How this fare has moved</h2>
-              <p>Cheapest price for these exact dates. Low {money(insight?.low || 0)} · Average {money(insight?.average || 0)} · High {money(insight?.high || 0)}</p>
+              <p>Sample fare for these exact dates, not a DOT ticket. Low {money(insight?.low || 0)} · Average {money(insight?.average || 0)} · High {money(insight?.high || 0)}</p>
             </div>
             <PriceChart history={result.history} />
           </section>

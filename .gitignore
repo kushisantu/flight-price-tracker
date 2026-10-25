@@ -6,6 +6,7 @@ __pycache__/
 *.py[cod]
 .env
 *.db
+backend/data/
 .pytest_cache/
 .DS_Store
 *.log

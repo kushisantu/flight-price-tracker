@@ -193,6 +193,17 @@ nav { display: flex; gap: 6px; }
 .insight.typical { background: var(--amber-soft); }
 .level { font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; font-size: 12px; }
 .insight p, .banner p { line-height: 1.45; }
+.fare-band {
+  margin: 16px 0;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fare-band h2 { font-size: 20px; }
 
 .deals { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .deal { text-align: left; padding: 14px; display: flex; flex-direction: column; gap: 6px; }

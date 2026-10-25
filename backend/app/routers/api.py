@@ -10,6 +10,7 @@ from app import database as database_module
 from app.database import get_db
 from app.models import Alert, PriceQuote
 from app.schemas import AlertCreate, SearchRequest, SmartRequest
+from app.services.fare_band import paid_fare_band
 from app.services.flights import TripQuery, calendar, deals, log_quote, outlook, quote_parts, search
 from app.services.smart import parse_smart
 
@@ -141,6 +142,11 @@ def search_flights(body: SearchRequest, db: Session = Depends(get_db)):
     _sync_alerts(db, query, price)
     db.commit()
     return result
+
+
+@router.get("/fare-band")
+def fare_band(origin: str, destination: str):
+    return paid_fare_band(origin, destination)
 
 
 @router.get("/outlook")

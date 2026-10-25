@@ -65,6 +65,9 @@ export const api = {
     return request(`/api/calendar?${params.toString()}`);
   },
   deals: (origin) => request(`/api/deals?origin=${encodeURIComponent(origin)}`),
+  fareBand: (origin, destination) => request(
+    `/api/fare-band?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`,
+  ),
   smart: (query, origin) => request("/api/smart-search", {
     method: "POST",
     body: JSON.stringify({ query, origin }),
