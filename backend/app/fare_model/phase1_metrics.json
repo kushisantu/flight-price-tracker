@@ -1,0 +1,27 @@
+{
+  "version": "empirical-2024q3-2025q1",
+  "source": "US DOT DB1B Market",
+  "holdout": "2025Q2",
+  "train_periods": [
+    "2024Q3",
+    "2024Q4",
+    "2025Q1"
+  ],
+  "seed": 1,
+  "min_passengers": 50,
+  "population": {
+    "rows": 7885446,
+    "empirical_mae": 97.42,
+    "route_average_mae": 102.13,
+    "linear_mae": 118.75,
+    "interval_coverage": 0.8105
+  },
+  "formula_comparable": {
+    "rows": 2101471,
+    "empirical_mae": 106.12,
+    "route_average_mae": 112.15,
+    "linear_mae": 126.89,
+    "interval_coverage": 0.8196,
+    "formula_mae": 109.49
+  }
+}

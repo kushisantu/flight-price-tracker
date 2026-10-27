@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.catalog import AIRLINES, get_place, search_places
+from app.catalog import AIRLINES, get_place
+from app.services.airports import search_airports
 from app import database as database_module
 from app.database import get_db
 from app.models import Alert, PriceQuote
@@ -122,7 +123,7 @@ def health(db: Session = Depends(get_db)):
 
 @router.get("/airports")
 def airports(q: str = Query(default="")):
-    return {"places": search_places(q)}
+    return {"places": search_airports(q)}
 
 
 @router.post("/search")

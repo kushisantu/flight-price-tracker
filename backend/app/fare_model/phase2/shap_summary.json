@@ -1,0 +1,15 @@
+{
+  "rows": 2000,
+  "seed": 1,
+  "mean_abs": {
+    "origin": 10.6894,
+    "dest": 10.523,
+    "airline": 35.2017,
+    "distance": 33.9708,
+    "quarter": 6.3651,
+    "coupons": 8.9296,
+    "stops": 0.0,
+    "nonstop": 0.0,
+    "carrier_share": 7.2745
+  }
+}

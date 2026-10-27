@@ -28,18 +28,17 @@ export default function FareBand({ origin, destination }) {
 
   return (
     <section className="fare-band">
-      <p className="level">US DOT tickets</p>
+      <p className="level">
+        {band.confidence === "low" ? "Low confidence" : band.estimate === "model" ? "US DOT model" : "US DOT tickets"}
+      </p>
       {band.available ? (
         <>
-          <h2>Real US tickets for this route usually paid {money(band.low)}–{money(band.high)}.</h2>
-          <p>
-            Median estimate {money(band.mid)} per person in {band.year} Q{band.quarter}, from{" "}
-            {band.passengers.toLocaleString("en-US")} passengers in the 10% sample.
-          </p>
-          <p className="fine">
-            {band.source}, model {band.model_version}. Passenger-weighted 10th to 90th percentile across airlines.
-            This is not a forecast, and it is separate from the sample fare chart.
-          </p>
+          <h2>
+            {band.estimate === "model"
+              ? <>Paid-fare model range for this route is {money(band.low)}–{money(band.high)}.</>
+              : <>Real tickets for this route usually paid {money(band.low)}–{money(band.high)}.</>}
+          </h2>
+          <p className="fine">{band.note}</p>
         </>
       ) : (
         <p>{band.note}</p>

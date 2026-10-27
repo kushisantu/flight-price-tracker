@@ -8,5 +8,7 @@ __pycache__/
 *.db
 backend/data/
 .pytest_cache/
+mlruns/
+backend/mlruns/
 .DS_Store
 *.log

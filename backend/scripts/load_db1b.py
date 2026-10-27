@@ -1,7 +1,7 @@
-"""Download DB1B Market quarters and keep fares for catalog US airports.
+"""Download DB1B Market quarters and keep every airport in those files.
 
-Raw zips stay in backend/data/raw, which is gitignored. Re-running skips a
-quarter that is already in the sqlite file.
+Raw zips stay in backend/data/raw, which is gitignored. This replaces the
+market_fares rows so the old airport whitelist is not left in place.
 """
 
 from __future__ import annotations
@@ -17,14 +17,14 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 from app.services.db1b import (  # noqa: E402
     DB_PATH,
+    OPENFLIGHTS_URL,
     QUARTERS,
     RAW_DIR,
     connect,
-    ensure_schema,
     loaded_quarters,
     normalize_fare,
     quarter_url,
-    us_airports,
+    reset_market_fares,
 )
 
 csv.field_size_limit(10_000_000)
@@ -41,20 +41,27 @@ COLUMNS = {
     "mktfare": "fare",
     "mktdistance": "distance",
     "mktcoupons": "coupons",
+    "originstate": "origin_state",
+    "deststate": "dest_state",
 }
 
+INSERT = """
+INSERT INTO market_fares (
+    year, quarter, origin, dest, airline, distance, passengers, fare, stops,
+    coupons, origin_state, dest_state
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+"""
 
-def _download(year: int, quarter: int) -> Path:
-    RAW_DIR.mkdir(parents=True, exist_ok=True)
-    destination = RAW_DIR / f"DB1BMarket_{year}_{quarter}.zip"
-    url = quarter_url(year, quarter)
+
+def _download(url: str, destination: Path) -> Path:
+    destination.parent.mkdir(parents=True, exist_ok=True)
     request = Request(url, headers={"User-Agent": "flight-price-tracker"})
     with urlopen(request, timeout=120) as response:
         expected = int(response.headers.get("Content-Length") or 0)
         if destination.exists() and expected and destination.stat().st_size == expected:
             print(f"already downloaded {destination.name}", flush=True)
             return destination
-        temporary = destination.with_suffix(".zip.partial")
+        temporary = destination.with_suffix(destination.suffix + ".partial")
         written = 0
         with temporary.open("wb") as handle:
             while True:
@@ -80,7 +87,7 @@ def _header_map(header: list[str]) -> dict[str, int]:
     return found
 
 
-def _load_zip(connection, path: Path, year: int, quarter: int, airports: set[str]) -> int:
+def _load_zip(connection, path: Path, year: int, quarter: int, airport_passengers: dict[str, int]) -> int:
     kept = 0
     scanned = 0
     batch: list[tuple] = []
@@ -114,40 +121,21 @@ def _load_zip(connection, path: Path, year: int, quarter: int, airports: set[str
                         "fare": cell(row, "fare"),
                         "distance": cell(row, "distance"),
                         "coupons": cell(row, "coupons"),
-                    },
-                    airports,
+                        "origin_state": cell(row, "origin_state"),
+                        "dest_state": cell(row, "dest_state"),
+                    }
                 )
-                if parsed is None:
+                if parsed is None or parsed[0] != year or parsed[1] != quarter:
                     continue
-                if parsed[0] != year or parsed[1] != quarter:
-                    continue
-                if kept < 5:
-                    print(
-                        f"  sample {parsed[2]}-{parsed[3]} {parsed[4]} "
-                        f"passengers={parsed[6]} fare={parsed[7]} stops={parsed[8]}",
-                        flush=True,
-                    )
+                airport_passengers[parsed[2]] = airport_passengers.get(parsed[2], 0) + parsed[6]
+                airport_passengers[parsed[3]] = airport_passengers.get(parsed[3], 0) + parsed[6]
                 batch.append(parsed)
                 kept += 1
-                if len(batch) >= 5000:
-                    connection.executemany(
-                        """
-                        INSERT INTO market_fares (
-                            year, quarter, origin, dest, airline, distance, passengers, fare, stops
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        batch,
-                    )
+                if len(batch) >= 10000:
+                    connection.executemany(INSERT, batch)
                     batch.clear()
     if batch:
-        connection.executemany(
-            """
-            INSERT INTO market_fares (
-                year, quarter, origin, dest, airline, distance, passengers, fare, stops
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            batch,
-        )
+        connection.executemany(INSERT, batch)
     connection.execute(
         "INSERT OR REPLACE INTO load_log (year, quarter, rows, source_file) VALUES (?, ?, ?, ?)",
         (year, quarter, kept, path.name),
@@ -157,11 +145,54 @@ def _load_zip(connection, path: Path, year: int, quarter: int, airports: set[str
     return kept
 
 
+def _openflights(connection, airport_passengers: dict[str, int]) -> None:
+    path = _download(OPENFLIGHTS_URL, RAW_DIR / "airports.dat")
+    found: set[str] = set()
+    with path.open(encoding="utf-8", errors="replace", newline="") as handle:
+        for row in csv.reader(handle):
+            if len(row) < 12:
+                continue
+            code = row[4].strip().upper()
+            if code not in airport_passengers or code in ("\\N", ""):
+                continue
+            try:
+                lat = float(row[6])
+                lon = float(row[7])
+            except ValueError:
+                lat = lon = None
+            name = row[1].strip() or "Name unavailable"
+            city = row[2].strip() or code
+            country = row[3].strip()
+            timezone = row[11].strip()
+            if timezone == "\\N":
+                timezone = ""
+            connection.execute(
+                """
+                INSERT OR REPLACE INTO airports (code, name, city, country, lat, lon, timezone, passengers)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (code, name, city, country, lat, lon, timezone, airport_passengers[code]),
+            )
+            found.add(code)
+    for code, passengers in airport_passengers.items():
+        if code in found:
+            continue
+        connection.execute(
+            """
+            INSERT INTO airports (code, name, city, country, lat, lon, timezone, passengers)
+            VALUES (?, 'Name unavailable', ?, '', NULL, NULL, '', ?)
+            """,
+            (code, code, passengers),
+        )
+    connection.commit()
+    print(f"airports {len(airport_passengers):,}  named {len(found):,}", flush=True)
+
+
 def main() -> None:
-    airports = us_airports()
     connection = connect(DB_PATH)
+    airport_passengers: dict[str, int] = {}
     try:
-        ensure_schema(connection)
+        reset_market_fares(connection)
         connection.execute("PRAGMA journal_mode = WAL")
         connection.execute("PRAGMA synchronous = OFF")
         done = loaded_quarters(connection)
@@ -169,21 +200,15 @@ def main() -> None:
             if (year, quarter) in done:
                 print(f"skip {year} Q{quarter}", flush=True)
                 continue
-            path = _download(year, quarter)
-            _load_zip(connection, path, year, quarter, airports)
+            path = _download(quarter_url(year, quarter), RAW_DIR / f"DB1BMarket_{year}_{quarter}.zip")
+            _load_zip(connection, path, year, quarter, airport_passengers)
         connection.execute("CREATE INDEX IF NOT EXISTS idx_market_route ON market_fares(origin, dest)")
         connection.execute("CREATE INDEX IF NOT EXISTS idx_market_period ON market_fares(year, quarter)")
         connection.commit()
+        _openflights(connection, airport_passengers)
         total = connection.execute("SELECT COUNT(*) FROM market_fares").fetchone()[0]
-        sample = connection.execute(
-            """
-            SELECT COUNT(*) AS rows, ROUND(AVG(fare), 1) AS avg_fare
-            FROM market_fares
-            WHERE origin = 'JFK' AND dest = 'LAX'
-            """
-        ).fetchone()
-        print(f"stored {total:,} fares in {DB_PATH}", flush=True)
-        print(f"JFK-LAX rows={sample['rows']} avg={sample['avg_fare']}", flush=True)
+        airports = connection.execute("SELECT COUNT(*) FROM airports").fetchone()[0]
+        print(f"stored {total:,} fares and {airports:,} airports in {DB_PATH}", flush=True)
     finally:
         connection.close()
 

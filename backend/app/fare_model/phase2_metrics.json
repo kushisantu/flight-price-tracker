@@ -1,0 +1,317 @@
+{
+  "version": "lgbm-2024q3-2024q4",
+  "empirical_version": "empirical-2024q3-2025q1",
+  "source": "US DOT DB1B Market",
+  "holdout": "2025Q2",
+  "train_periods": [
+    "2024Q3",
+    "2024Q4"
+  ],
+  "calibration_period": "2025Q1",
+  "seed": 1,
+  "conformal_offset": 6.3588,
+  "coverage_level": 0.8,
+  "features": [
+    "origin",
+    "dest",
+    "airline",
+    "distance",
+    "quarter",
+    "coupons",
+    "stops",
+    "nonstop",
+    "carrier_share"
+  ],
+  "skipped_unknown_category": 2537,
+  "comparison": {
+    "rows": 7884075,
+    "model_mae": 89.93,
+    "empirical_mae": 97.42,
+    "route_average_mae": 102.13,
+    "linear_mae": 118.76,
+    "raw_10_90_coverage": 0.7869,
+    "conformal_10_90_coverage": 0.819,
+    "empirical_coverage": 0.8105
+  },
+  "formula_comparable": {
+    "rows": 2101471,
+    "model_mae": 97.04,
+    "empirical_mae": 106.12,
+    "route_average_mae": 112.15,
+    "linear_mae": 126.89,
+    "raw_10_90_coverage": 0.7927,
+    "conformal_10_90_coverage": 0.8214,
+    "formula_mae": 109.49
+  },
+  "by_volume_tier": {
+    "5000_plus": {
+      "rows": 3102764,
+      "passengers": 7931487,
+      "model_mae": 87.61,
+      "raw_10_90_coverage": 0.7848,
+      "conformal_10_90_coverage": 0.8168
+    },
+    "500_4999": {
+      "rows": 3210686,
+      "passengers": 4799927,
+      "model_mae": 86.54,
+      "raw_10_90_coverage": 0.7858,
+      "conformal_10_90_coverage": 0.8199
+    },
+    "50_499": {
+      "rows": 1288415,
+      "passengers": 1406891,
+      "model_mae": 107.5,
+      "raw_10_90_coverage": 0.7974,
+      "conformal_10_90_coverage": 0.8256
+    },
+    "no_training_route": {
+      "rows": 4506,
+      "passengers": 7857,
+      "model_mae": 64.14,
+      "raw_10_90_coverage": 0.6608,
+      "conformal_10_90_coverage": 0.7939
+    },
+    "under_50": {
+      "rows": 277704,
+      "passengers": 285919,
+      "model_mae": 125.38,
+      "raw_10_90_coverage": 0.8159,
+      "conformal_10_90_coverage": 0.8344
+    }
+  },
+  "by_airline": [
+    {
+      "rows": 1648192,
+      "passengers": 2863078,
+      "model_mae": 69.33,
+      "raw_10_90_coverage": 0.7864,
+      "conformal_10_90_coverage": 0.8197,
+      "airline": "WN"
+    },
+    {
+      "rows": 1845004,
+      "passengers": 2842124,
+      "model_mae": 105.67,
+      "raw_10_90_coverage": 0.8045,
+      "conformal_10_90_coverage": 0.8273,
+      "airline": "AA"
+    },
+    {
+      "rows": 1601430,
+      "passengers": 2723940,
+      "model_mae": 116.95,
+      "raw_10_90_coverage": 0.7786,
+      "conformal_10_90_coverage": 0.8004,
+      "airline": "DL"
+    },
+    {
+      "rows": 1367971,
+      "passengers": 2216073,
+      "model_mae": 112.86,
+      "raw_10_90_coverage": 0.7851,
+      "conformal_10_90_coverage": 0.8084,
+      "airline": "UA"
+    },
+    {
+      "rows": 392045,
+      "passengers": 803919,
+      "model_mae": 96.22,
+      "raw_10_90_coverage": 0.8026,
+      "conformal_10_90_coverage": 0.8265,
+      "airline": "AS"
+    },
+    {
+      "rows": 236112,
+      "passengers": 685983,
+      "model_mae": 38.88,
+      "raw_10_90_coverage": 0.8007,
+      "conformal_10_90_coverage": 0.8608,
+      "airline": "NK"
+    },
+    {
+      "rows": 195226,
+      "passengers": 661019,
+      "model_mae": 87.7,
+      "raw_10_90_coverage": 0.7483,
+      "conformal_10_90_coverage": 0.7837,
+      "airline": "B6"
+    },
+    {
+      "rows": 246345,
+      "passengers": 660718,
+      "model_mae": 39.8,
+      "raw_10_90_coverage": 0.8362,
+      "conformal_10_90_coverage": 0.8739,
+      "airline": "F9"
+    },
+    {
+      "rows": 171111,
+      "passengers": 469749,
+      "model_mae": 29.94,
+      "raw_10_90_coverage": 0.7199,
+      "conformal_10_90_coverage": 0.8299,
+      "airline": "G4"
+    },
+    {
+      "rows": 71637,
+      "passengers": 189435,
+      "model_mae": 84.93,
+      "raw_10_90_coverage": 0.766,
+      "conformal_10_90_coverage": 0.8067,
+      "airline": "HA"
+    },
+    {
+      "rows": 69301,
+      "passengers": 149636,
+      "model_mae": 36.86,
+      "raw_10_90_coverage": 0.742,
+      "conformal_10_90_coverage": 0.821,
+      "airline": "MX"
+    },
+    {
+      "rows": 15316,
+      "passengers": 96975,
+      "model_mae": 42.26,
+      "raw_10_90_coverage": 0.7818,
+      "conformal_10_90_coverage": 0.8379,
+      "airline": "SY"
+    },
+    {
+      "rows": 22571,
+      "passengers": 65148,
+      "model_mae": 31.45,
+      "raw_10_90_coverage": 0.6648,
+      "conformal_10_90_coverage": 0.7706,
+      "airline": "XP"
+    },
+    {
+      "rows": 1596,
+      "passengers": 4048,
+      "model_mae": 55.6,
+      "raw_10_90_coverage": 0.7048,
+      "conformal_10_90_coverage": 0.7468,
+      "airline": "3M"
+    },
+    {
+      "rows": 95,
+      "passengers": 96,
+      "model_mae": 47.45,
+      "raw_10_90_coverage": 0.8125,
+      "conformal_10_90_coverage": 0.8125,
+      "airline": "LF"
+    },
+    {
+      "rows": 25,
+      "passengers": 37,
+      "model_mae": 69.42,
+      "raw_10_90_coverage": 0.9189,
+      "conformal_10_90_coverage": 0.9189,
+      "airline": "PR"
+    },
+    {
+      "rows": 21,
+      "passengers": 23,
+      "model_mae": 77.26,
+      "raw_10_90_coverage": 0.6522,
+      "conformal_10_90_coverage": 0.6957,
+      "airline": "KG"
+    },
+    {
+      "rows": 22,
+      "passengers": 22,
+      "model_mae": 56.67,
+      "raw_10_90_coverage": 0.5909,
+      "conformal_10_90_coverage": 0.6364,
+      "airline": "9X"
+    },
+    {
+      "rows": 21,
+      "passengers": 21,
+      "model_mae": 86.08,
+      "raw_10_90_coverage": 0.619,
+      "conformal_10_90_coverage": 0.6667,
+      "airline": "9K"
+    },
+    {
+      "rows": 13,
+      "passengers": 15,
+      "model_mae": 89.83,
+      "raw_10_90_coverage": 0.6,
+      "conformal_10_90_coverage": 0.6,
+      "airline": "VC"
+    },
+    {
+      "rows": 9,
+      "passengers": 9,
+      "model_mae": 528.79,
+      "raw_10_90_coverage": 0.0,
+      "conformal_10_90_coverage": 0.0,
+      "airline": "QR"
+    },
+    {
+      "rows": 3,
+      "passengers": 3,
+      "model_mae": 72.74,
+      "raw_10_90_coverage": 0.6667,
+      "conformal_10_90_coverage": 0.6667,
+      "airline": "AC"
+    },
+    {
+      "rows": 2,
+      "passengers": 2,
+      "model_mae": 1957.18,
+      "raw_10_90_coverage": 0.0,
+      "conformal_10_90_coverage": 0.0,
+      "airline": "QF"
+    },
+    {
+      "rows": 1,
+      "passengers": 2,
+      "model_mae": 1193.78,
+      "raw_10_90_coverage": 0.0,
+      "conformal_10_90_coverage": 0.0,
+      "airline": "NZ"
+    },
+    {
+      "rows": 2,
+      "passengers": 2,
+      "model_mae": 985.88,
+      "raw_10_90_coverage": 0.0,
+      "conformal_10_90_coverage": 0.0,
+      "airline": "SQ"
+    },
+    {
+      "rows": 1,
+      "passengers": 1,
+      "model_mae": 59.8,
+      "raw_10_90_coverage": 1.0,
+      "conformal_10_90_coverage": 1.0,
+      "airline": "VS"
+    },
+    {
+      "rows": 1,
+      "passengers": 1,
+      "model_mae": 1087.37,
+      "raw_10_90_coverage": 0.0,
+      "conformal_10_90_coverage": 0.0,
+      "airline": "LH"
+    },
+    {
+      "rows": 1,
+      "passengers": 1,
+      "model_mae": 1897.01,
+      "raw_10_90_coverage": 0.0,
+      "conformal_10_90_coverage": 0.0,
+      "airline": "BA"
+    },
+    {
+      "rows": 1,
+      "passengers": 1,
+      "model_mae": 78.59,
+      "raw_10_90_coverage": 1.0,
+      "conformal_10_90_coverage": 1.0,
+      "airline": "4B"
+    }
+  ]
+}

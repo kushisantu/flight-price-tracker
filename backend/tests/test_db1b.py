@@ -1,37 +1,35 @@
-from app.services.db1b import normalize_fare, us_airports
+from app.services.db1b import normalize_fare
 
 
-def test_keeps_domestic_catalog_fare_without_dividing():
-    airports = us_airports()
+def test_keeps_every_airport_and_does_not_divide_the_fare():
     parsed = normalize_fare(
         {
             "year": "2025",
             "quarter": "2",
-            "origin": "JFK",
-            "dest": "LAX",
+            "origin": "ABI",
+            "dest": "DFW",
             "tk": "AA",
             "op": "AA",
             "bulk": "0",
             "passengers": "2",
             "fare": "350",
-            "distance": "2475",
+            "distance": "283",
             "coupons": "1",
-        },
-        airports,
+            "origin_state": "TX",
+            "dest_state": "TX",
+        }
     )
     assert parsed is not None
-    year, quarter, origin, dest, airline, distance, passengers, fare, stops = parsed
-    assert (year, quarter, origin, dest, airline) == (2025, 2, "JFK", "LAX", "AA")
-    assert passengers == 2
-    assert fare == 350.0
-    assert distance == 2475
-    assert stops == 0
+    assert parsed[2:5] == ("ABI", "DFW", "AA")
+    assert parsed[6] == 2
+    assert parsed[7] == 350.0
+    assert parsed[8] == 0
+    assert parsed[9] == 1
+    assert parsed[10:] == ("TX", "TX")
 
 
-def test_drops_international_bulk_and_bad_fares():
-    airports = us_airports()
-    assert "LHR" not in airports
-    assert normalize_fare(
+def test_keeps_international_markets_present_in_the_file():
+    parsed = normalize_fare(
         {
             "year": "2025",
             "quarter": "2",
@@ -42,40 +40,32 @@ def test_drops_international_bulk_and_bad_fares():
             "bulk": "0",
             "passengers": "1",
             "fare": "500",
-            "distance": "5500",
+            "distance": "3450",
             "coupons": "1",
-        },
-        airports,
-    ) is None
-    assert normalize_fare(
-        {
-            "year": "2025",
-            "quarter": "2",
-            "origin": "JFK",
-            "dest": "LAX",
-            "tk": "AA",
-            "op": "AA",
-            "bulk": "1",
-            "passengers": "1",
-            "fare": "500",
-            "distance": "2475",
-            "coupons": "1",
-        },
-        airports,
-    ) is None
-    assert normalize_fare(
-        {
-            "year": "2025",
-            "quarter": "2",
-            "origin": "JFK",
-            "dest": "LAX",
-            "tk": "AA",
-            "op": "AA",
-            "bulk": "0",
-            "passengers": "1",
-            "fare": "5",
-            "distance": "2475",
-            "coupons": "2",
-        },
-        airports,
-    ) is None
+            "origin_state": "NY",
+            "dest_state": "",
+        }
+    )
+    assert parsed is not None
+    assert parsed[2:4] == ("JFK", "LHR")
+
+
+def test_drops_bulk_same_airport_and_bad_fares():
+    base = {
+        "year": "2025",
+        "quarter": "2",
+        "origin": "JFK",
+        "dest": "LAX",
+        "tk": "AA",
+        "op": "AA",
+        "bulk": "0",
+        "passengers": "1",
+        "fare": "500",
+        "distance": "2475",
+        "coupons": "1",
+        "origin_state": "NY",
+        "dest_state": "CA",
+    }
+    assert normalize_fare({**base, "bulk": "1"}) is None
+    assert normalize_fare({**base, "dest": "JFK"}) is None
+    assert normalize_fare({**base, "fare": "5"}) is None

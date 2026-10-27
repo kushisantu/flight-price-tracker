@@ -1,154 +1,157 @@
-"""Paid-fare range from the DOT model.
+"""Paid-fare range from the empirical DOT table.
 
-The numbers are a passenger-weighted 10th to 90th percentile for the latest
-quarter the model was tested on. They are not a forecast of a future listing.
+Numbers come from 2024 Q3 through 2025 Q1. They are not a forecast, and they
+are not the sample fare board.
 """
 
 from __future__ import annotations
 
-import json
-from functools import lru_cache
 from pathlib import Path
 
-import numpy as np
-
-from app.catalog import get_place
-from app.services.db1b import SOURCE
+from app.catalog import AIRPORTS, CITIES
+from app.services.db1b import DB_PATH, SOURCE, connect, known_airport
+from app.services.empirical import VERSION, lookup_prediction, prediction_note
+from app.services.phase2 import VERSION as MODEL_VERSION
+from app.services.phase2 import model_note
 
 MODEL_DIR = Path(__file__).resolve().parents[1] / "fare_model"
 EMPTY_NOTE = "No DOT ticket sample covers this route. The flight board still uses the sample fare model."
 
 
-def _empty(version: str | None, note: str = EMPTY_NOTE) -> dict:
+def _empty(note: str = EMPTY_NOTE) -> dict:
     return {
         "available": False,
         "low": None,
         "mid": None,
         "high": None,
-        "year": None,
-        "quarter": None,
+        "confidence": None,
+        "slice": None,
         "passengers": 0,
         "source": SOURCE,
-        "model_version": version,
+        "model_version": VERSION,
         "note": note,
     }
 
 
-@lru_cache(maxsize=1)
-def _load_bundle(stamp: float) -> dict:
-    del stamp
-    metadata = json.loads((MODEL_DIR / "metadata.json").read_text(encoding="utf-8"))
-    import lightgbm as lgb
-
-    boosters = {
-        name: lgb.Booster(model_file=str(MODEL_DIR / filename))
-        for name, filename in (("p10", "quantile_10.txt"), ("p50", "quantile_50.txt"), ("p90", "quantile_90.txt"))
-    }
-    categories = metadata["categories"]
-    return {
-        "metadata": metadata,
-        "boosters": boosters,
-        "indexes": {name: {code: index for index, code in enumerate(levels)} for name, levels in categories.items()},
-    }
+def airport_codes(code: str) -> list[str]:
+    key = (code or "").strip().upper()
+    if key in CITIES:
+        return list(CITIES[key]["airports"])
+    if key in AIRPORTS or known_airport(key):
+        return [key]
+    raise ValueError(f"No airport or city matches {key}.")
 
 
-def _bundle() -> dict | None:
-    meta_path = MODEL_DIR / "metadata.json"
-    if not meta_path.exists():
-        return None
-    return _load_bundle(meta_path.stat().st_mtime)
+def _model_ready(connection) -> bool:
+    row = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'model_route_bands'"
+    ).fetchone()
+    if row is None:
+        return False
+    count = connection.execute("SELECT COUNT(*) AS n FROM model_route_bands").fetchone()["n"]
+    return int(count) > 0
 
 
-def _predict(bundle: dict, origin: str, dest: str, airline: str, distance: float, year: int, quarter: int):
-    indexes = bundle["indexes"]
-    try:
-        row = np.array(
-            [[
-                indexes["origin"][origin],
-                indexes["dest"][dest],
-                indexes["airline"][airline],
-                distance,
-                year,
-                quarter,
-            ]],
-            dtype=np.float64,
-        )
-    except KeyError:
-        return None
-    boosters = bundle["boosters"]
-    return (
-        float(boosters["p10"].predict(row)[0]),
-        float(boosters["p50"].predict(row)[0]),
-        float(boosters["p90"].predict(row)[0]),
-    )
-
-
-def paid_fare_band(origin: str, destination: str) -> dict:
-    origin_place = get_place(origin)
-    dest_place = get_place(destination)
-    bundle = _bundle()
-    if bundle is None:
-        return _empty(None, "The paid-fare model is not installed. The flight board still uses the sample fare model.")
-
-    metadata = bundle["metadata"]
-    version = metadata["version"]
-    year = int(metadata["predict_year"])
-    quarter = int(metadata["predict_quarter"])
-    routes = metadata["routes"]
-
-    low_total = mid_total = high_total = weight = 0.0
-    for origin_code in origin_place["airports"]:
-        for dest_code in dest_place["airports"]:
-            route = routes.get(f"{origin_code}-{dest_code}")
-            if not route:
+def _from_model(connection, origins: list[str], destinations: list[str]) -> dict:
+    chosen = []
+    for origin_code in origins:
+        for dest_code in destinations:
+            if origin_code == dest_code:
                 continue
-            for airline in route["airlines"]:
-                predicted = _predict(
-                    bundle,
-                    origin_code,
-                    dest_code,
-                    airline["code"],
-                    float(airline["distance"]),
-                    year,
-                    quarter,
-                )
-                if predicted is None:
-                    continue
-                passengers = float(airline["passengers"])
-                if passengers <= 0:
-                    continue
-                low, mid, high = predicted
-                low_total += low * passengers
-                mid_total += mid * passengers
-                high_total += high * passengers
-                weight += passengers
-
-    if weight <= 0:
-        return _empty(version)
-
-    low = int(round(low_total / weight))
-    mid = int(round(mid_total / weight))
-    high = int(round(high_total / weight))
-    if high <= low:
-        high = low + 1
+            row = connection.execute(
+                """
+                SELECT passengers, low, mid, high, confidence
+                FROM model_route_bands
+                WHERE origin = ? AND dest = ?
+                """,
+                (origin_code, dest_code),
+            ).fetchone()
+            if row is not None and int(row["passengers"]) > 0:
+                chosen.append(row)
+    if not chosen:
+        payload = _empty()
+        payload["model_version"] = MODEL_VERSION
+        payload["estimate"] = "model"
+        return payload
+    weight = sum(int(row["passengers"]) for row in chosen)
+    low = int(round(sum(int(row["low"]) * int(row["passengers"]) for row in chosen) / weight))
+    mid = int(round(sum(int(row["mid"]) * int(row["passengers"]) for row in chosen) / weight))
+    high = int(round(sum(int(row["high"]) * int(row["passengers"]) for row in chosen) / weight))
     if mid < low:
         mid = low
-    if mid > high:
-        mid = high
+    if high < mid:
+        high = mid
+    confidence = "low" if any(row["confidence"] == "low" for row in chosen) else "normal"
     return {
         "available": True,
         "low": low,
         "mid": mid,
         "high": high,
-        "year": year,
-        "quarter": quarter,
-        "passengers": int(round(weight)),
+        "confidence": confidence,
+        "slice": "model",
+        "passengers": int(weight),
         "source": SOURCE,
-        "model_version": version,
-        "note": (
-            f"Real US tickets for this route usually paid ${low:,}–${high:,}. "
-            f"Model {version} on {SOURCE}, {year} Q{quarter}. "
-            "The range is the passenger-weighted 10th to 90th percentile across airlines. "
-            "It is not a forecast of a future listing."
-        ),
+        "model_version": MODEL_VERSION,
+        "estimate": "model",
+        "note": model_note(low, high, confidence),
+    }
+
+
+def paid_fare_band(origin: str, destination: str) -> dict:
+    origins = airport_codes(origin)
+    destinations = airport_codes(destination)
+    if not DB_PATH.exists():
+        return _empty("The paid-fare table is not installed. The flight board still uses the sample fare model.")
+    connection = connect()
+    try:
+        table = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'route_quantiles'"
+        ).fetchone()
+        if _model_ready(connection):
+            return _from_model(connection, origins, destinations)
+        if table is None:
+            return _empty("The paid-fare table is not installed. The flight board still uses the sample fare model.")
+        chosen = []
+        for origin_code in origins:
+            for dest_code in destinations:
+                if origin_code == dest_code:
+                    continue
+                predicted = lookup_prediction(connection, origin_code, dest_code)
+                if predicted is not None:
+                    chosen.append(predicted)
+    finally:
+        connection.close()
+    if not chosen:
+        return _empty()
+
+    weight = sum(item["route_passengers"] for item in chosen)
+    if weight <= 0:
+        return _empty()
+    low = int(round(sum(item["low"] * item["route_passengers"] for item in chosen) / weight))
+    mid = int(round(sum(item["mid"] * item["route_passengers"] for item in chosen) / weight))
+    high = int(round(sum(item["high"] * item["route_passengers"] for item in chosen) / weight))
+    if mid < low:
+        mid = low
+    if high < mid:
+        high = mid
+    slices = {item["slice"] for item in chosen}
+    slice_name = next(iter(slices)) if len(slices) == 1 else "mixed"
+    confidence = "low" if any(item["confidence"] == "low" for item in chosen) else "normal"
+    if slice_name == "mixed":
+        label = "a mix of this airport pair and a broader DOT slice"
+    else:
+        label = chosen[0]["label"] if len(chosen) == 1 else "these airport pairs"
+        if slice_name != "route":
+            label = chosen[0]["label"]
+    return {
+        "available": True,
+        "low": low,
+        "mid": mid,
+        "high": high,
+        "confidence": confidence,
+        "slice": slice_name,
+        "passengers": int(weight),
+        "source": SOURCE,
+        "model_version": VERSION,
+        "note": prediction_note(low, high, confidence, label),
     }

@@ -15,6 +15,7 @@ from datetime import date, datetime, timedelta
 from functools import lru_cache
 
 from app.catalog import AIRLINES, AIRPORTS, get_place, region_of
+from app.services.db1b import known_airport
 
 CABINS = {
     "economy": 1.0,
@@ -103,9 +104,18 @@ def _as_date(value) -> date:
     return date.fromisoformat(str(value))
 
 
+def _sample_place(code: str) -> dict:
+    try:
+        return get_place(code)
+    except ValueError:
+        if known_airport(code):
+            raise ValueError("The sample fare board does not include this airport.") from None
+        raise
+
+
 def _validate(query: TripQuery) -> None:
-    get_place(query.origin)
-    get_place(query.destination)
+    _sample_place(query.origin)
+    _sample_place(query.destination)
     if query.origin == query.destination:
         raise ValueError("Choose two different places.")
     if set(get_place(query.origin)["airports"]) == set(get_place(query.destination)["airports"]):
