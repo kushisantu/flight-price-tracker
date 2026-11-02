@@ -1,8 +1,9 @@
 """Seeded fare simulator.
 
-Observable factors set a stable base fare. A hidden market path, shared by
-every airline on a route and departure date, moves that base up and down.
-The same seed always rebuilds the same path.
+Where the DOT model covers the airline and route, the base fare is that
+model's median. Lead time, weekday, cabin, party size, and the hidden demand
+path are assumptions layered on that median. The same seed always rebuilds
+the same path. These numbers are sample fares, not DOT tickets.
 """
 
 from __future__ import annotations
@@ -68,7 +69,18 @@ def _observable_base(
     raw *= DOW[depart.weekday()]
     if passengers >= 4:
         raw *= 1.03
-    return raw
+    from app.services.deal import sample_anchor
+
+    quarter = (depart.month - 1) // 3 + 1
+    anchor = sample_anchor(origin_code, dest_code, airline_code, quarter, stops)
+    if anchor is None:
+        return raw
+    # The median already includes distance, airline, quarter, and stops.
+    # Weekday and cabin stay as assumptions on top of it.
+    anchored = float(anchor) * DOW[depart.weekday()] * CABINS.get(cabin, 1.0)
+    if passengers >= 4:
+        anchored *= 1.03
+    return anchored
 
 
 def price_limits(base: float) -> tuple[int, int]:

@@ -50,6 +50,7 @@ function outlookQuery(criteria) {
 
 export const api = {
   health: () => request("/api/health"),
+  modelMetrics: () => request("/api/model/metrics"),
   airports: (q) => request(`/api/airports?q=${encodeURIComponent(q)}`),
   search: (criteria) => request("/api/search", { method: "POST", body: JSON.stringify(toSearchBody(criteria)) }),
   outlook: (criteria) => request(`/api/outlook?${outlookQuery(criteria)}`),
@@ -68,6 +69,17 @@ export const api = {
   fareBand: (origin, destination) => request(
     `/api/fare-band?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`,
   ),
+  dealScore: ({ origin, destination, airline, quarter, fare, fareKind = "sample" }) => {
+    const params = new URLSearchParams({
+      origin,
+      destination,
+      airline,
+      quarter: String(quarter),
+      fare: String(fare),
+      fare_kind: fareKind,
+    });
+    return request(`/api/deal-score?${params.toString()}`);
+  },
   smart: (query, origin) => request("/api/smart-search", {
     method: "POST",
     body: JSON.stringify({ query, origin }),

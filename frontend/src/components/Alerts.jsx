@@ -9,6 +9,7 @@ const STATUS = {
   rose: "Hit your target earlier, then rose",
   watching: "Watching",
   paused: "Paused",
+  deal: "Good deal or better on the simulated fare",
 };
 
 export default function Alerts({ onCount, onOpenRoute }) {
@@ -25,6 +26,7 @@ export default function Alerts({ onCount, onOpenRoute }) {
     target: 500,
     email: "",
     cabin: "economy",
+    dealWatch: false,
   });
 
   async function load() {
@@ -82,6 +84,7 @@ export default function Alerts({ onCount, onOpenRoute }) {
         passengers: 1,
         cabin: form.cabin,
         target_price: Number(form.target),
+        deal_watch: form.dealWatch,
         email: form.email.trim() || null,
       });
       await load();
@@ -119,6 +122,10 @@ export default function Alerts({ onCount, onOpenRoute }) {
             <span>Email</span>
             <input type="email" value={form.email} placeholder="Optional" onChange={(event) => setForm({ ...form, email: event.target.value })} />
           </label>
+          <label className="field check">
+            <input type="checkbox" checked={form.dealWatch} onChange={(event) => setForm({ ...form, dealWatch: event.target.checked })} />
+            <span>Also tell me if the simulated outbound fare is a Good deal or better against real DOT tickets</span>
+          </label>
           <button className="primary" type="submit">Create alert</button>
         </form>
         {error && <p className="form-error">{error}</p>}
@@ -139,6 +146,13 @@ export default function Alerts({ onCount, onOpenRoute }) {
                   {alert.return_date ? ` – ${formatLong(alert.return_date)}` : " · One way"}
                 </span>
                 <span className={`pill ${alert.status}`}>{STATUS[alert.status]}</span>
+                {alert.deal_watch && (
+                  <span>
+                    {alert.deal_label
+                      ? `${alert.deal_label} on the simulated fare versus real DOT tickets`
+                      : "Watching the simulated fare against real DOT tickets"}
+                  </span>
+                )}
               </button>
               <div className="alert-prices">
                 <div>

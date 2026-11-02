@@ -12,7 +12,7 @@ import { formatShort, money } from "../format";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip);
 
-export default function PriceChart({ history, target, height = 240 }) {
+export default function PriceChart({ history, target, band, height = 240 }) {
   if (!history?.length) {
     return <p className="muted">Price history will show up after a route is selected.</p>;
   }
@@ -51,6 +51,27 @@ export default function PriceChart({ history, target, height = 240 }) {
       fill: false,
       borderWidth: 1.5,
     });
+  }
+  if (band?.available && band.low != null && band.high != null) {
+    datasets.push(
+      {
+        label: "DOT paid high",
+        data: prices.map(() => band.high),
+        borderColor: "transparent",
+        pointRadius: 0,
+        fill: false,
+        borderWidth: 0,
+      },
+      {
+        label: "what travelers actually paid on this route (US DOT sample)",
+        data: prices.map(() => band.low),
+        borderColor: "rgba(94, 224, 181, 0.85)",
+        backgroundColor: "rgba(94, 224, 181, 0.18)",
+        pointRadius: 0,
+        fill: "-1",
+        borderWidth: 1.5,
+      },
+    );
   }
 
   return (

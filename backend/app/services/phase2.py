@@ -168,6 +168,44 @@ def volume_tier(passengers: int) -> str:
     return "5000_plus"
 
 
+def fare_percentile(fare: float, quantiles: np.ndarray, alphas: tuple[float, ...] = ALPHAS) -> float:
+    """Where this fare sits in the predicted distribution, from 0 to 100.
+
+    The score is linear between neighboring quantiles. Below the lowest quantile
+    it fades toward 0, and above the highest it fades toward 100.
+    """
+    levels = [float(value) for value in quantiles]
+    percents = [alpha * 100 for alpha in alphas]
+    if fare <= levels[0]:
+        if levels[0] <= 0:
+            return 0.0
+        return percents[0] * max(fare, 0.0) / levels[0]
+    if fare >= levels[-1]:
+        span = levels[-1]
+        if span <= 0:
+            return 100.0
+        extra = (100 - percents[-1]) * min(1.0, (fare - levels[-1]) / span)
+        return min(100.0, percents[-1] + extra)
+    for index in range(len(levels) - 1):
+        if fare <= levels[index + 1]:
+            width = levels[index + 1] - levels[index]
+            if width <= 0:
+                return percents[index + 1]
+            fraction = (fare - levels[index]) / width
+            return percents[index] + fraction * (percents[index + 1] - percents[index])
+    return percents[-1]
+
+
+def deal_label(percentile: float) -> str:
+    if percentile <= 10:
+        return "Great"
+    if percentile <= 25:
+        return "Good"
+    if percentile <= 75:
+        return "Typical"
+    return "High"
+
+
 def model_note(low: int, high: int, confidence: str) -> str:
     base = (
         f"LightGBM quantile model for this airport pair, {SOURCE}, {VERSION}. "

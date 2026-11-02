@@ -13,7 +13,8 @@ import {
   shiftMonth,
   todayISO,
 } from "../format";
-import FareBand from "./FareBand";
+import DealLabel from "./DealLabel";
+import FareBand, { useFareBand } from "./FareBand";
 import PriceChart from "./PriceChart";
 import SearchForm from "./SearchForm";
 
@@ -60,8 +61,10 @@ export default function Results({
   const [draft, setDraft] = useState(null);
   const [target, setTarget] = useState(0);
   const [email, setEmail] = useState("");
+  const [dealWatch, setDealWatch] = useState(false);
   const [alertError, setAlertError] = useState("");
   const [saving, setSaving] = useState(false);
+  const band = useFareBand(criteria.origin?.code, criteria.destination?.code);
   const [showCalendar, setShowCalendar] = useState(false);
   const [month, setMonth] = useState(criteria.departDate.slice(0, 7));
   const [calendarDays, setCalendarDays] = useState([]);
@@ -177,6 +180,7 @@ export default function Results({
         airline_code: draft.airline_code,
         stops: draft.stops,
         target_price: Number(target),
+        deal_watch: dealWatch,
         email: email.trim() || null,
       });
       setDraft(null);
@@ -288,14 +292,23 @@ export default function Results({
             </section>
           )}
 
-          <FareBand origin={criteria.origin?.code} destination={criteria.destination?.code} />
+          <FareBand band={band ?? null} origin={criteria.origin?.code} destination={criteria.destination?.code} />
 
           <section className="panel history-panel">
             <div className="panel-head">
               <h2>How this fare has moved</h2>
-              <p>Sample fare for these exact dates, not a DOT ticket. Low {money(insight?.low || 0)} · Average {money(insight?.average || 0)} · High {money(insight?.high || 0)}</p>
+              <p>
+                The line is the sample fare for these exact dates, not a DOT ticket.
+                {band?.available ? " The shade is what travelers actually paid on this route (US DOT sample), one way." : ""}
+                {" "}Low {money(insight?.low || 0)} · Average {money(insight?.average || 0)} · High {money(insight?.high || 0)}
+              </p>
             </div>
-            <PriceChart history={result.history} />
+            <PriceChart history={result.history} band={band?.available ? band : null} />
+            {result.sample_assumptions?.length > 0 && (
+              <ul className="fine">
+                {result.sample_assumptions.map((line) => <li key={line}>{line}</li>)}
+              </ul>
+            )}
           </section>
         </>
       )}
@@ -435,6 +448,13 @@ export default function Results({
               <div className="flight-price">
                 <strong className={flight.id === cheapestId ? "cheap-price" : ""}>{money(flight.price)}</strong>
                 <span>per person</span>
+                <DealLabel
+                  origin={flight.legs[0].origin}
+                  destination={flight.legs[0].destination}
+                  airline={flight.airline_code}
+                  departDate={criteria.departDate}
+                  fare={flight.directional_price || flight.price}
+                />
                 {criteria.passengers > 1 && <span>{money(flight.total_price)} total</span>}
                 <button
                   type="button"
@@ -469,7 +489,11 @@ export default function Results({
               <span>Email (optional, saved only)</span>
               <input type="email" value={email} placeholder="you@email.com" onChange={(event) => setEmail(event.target.value)} />
             </label>
-            <p className="fine">The alert updates when you open Alerts or search this route. Email is stored for later, not sent yet.</p>
+            <label className="field check">
+              <input type="checkbox" checked={dealWatch} onChange={(event) => setDealWatch(event.target.checked)} />
+              <span>Also tell me if this simulated outbound fare is a Good deal or better against real DOT tickets</span>
+            </label>
+            <p className="fine">The alert updates when you open Alerts or search this route. Email is stored for later, not sent yet. Book or wait stays a heuristic because DOT tickets have no booking date.</p>
             {alertError && <p className="form-error">{alertError}</p>}
             <div className="modal-actions">
               <button type="button" className="secondary" onClick={() => setDraft(null)}>Cancel</button>

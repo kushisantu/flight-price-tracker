@@ -11,8 +11,9 @@ from app import database as database_module
 from app.database import get_db
 from app.models import Alert, PriceQuote
 from app.schemas import AlertCreate, SearchRequest, SmartRequest
+from app.services.deal import deal_score
 from app.services.fare_band import paid_fare_band
-from app.services.flights import TripQuery, calendar, deals, log_quote, outlook, quote_parts, search
+from app.services.flights import TripQuery, calendar, deals, log_quote, outlook, quote_parts, sample_outbound, search
 from app.services.smart import parse_smart
 
 router = APIRouter(prefix="/api")
@@ -28,15 +29,16 @@ def _apply_price(alert: Alert, price: int) -> None:
     alert.last_checked_at = _now()
     if price <= alert.target_price and alert.triggered_at is None:
         alert.triggered_at = _now()
+        alert.triggered_reason = "price"
 
 
 def _status(alert: Alert) -> str:
     if not alert.active:
         return "paused"
-    if alert.last_price is None:
-        return "watching"
-    if alert.last_price <= alert.target_price:
+    if alert.last_price is not None and alert.last_price <= alert.target_price:
         return "hit"
+    if alert.deal_watch and alert.deal_percentile is not None and alert.deal_percentile <= 25:
+        return "deal"
     if alert.triggered_at is not None:
         return "rose"
     return "watching"
@@ -54,11 +56,33 @@ def _alert_query(alert: Alert) -> TripQuery:
     )
 
 
+def _watch_deal(alert: Alert, airline: str, outbound: int) -> None:
+    if not alert.deal_watch or not airline:
+        return
+    from app.services.deal import deal_score
+
+    quarter = (alert.depart_date.month - 1) // 3 + 1
+    try:
+        score = deal_score(alert.origin, alert.destination, airline, quarter, outbound, "sample")
+    except Exception:
+        return
+    alert.deal_label = score.get("label")
+    percentile = score.get("percentile")
+    alert.deal_percentile = None if percentile is None else int(round(percentile))
+    good = score.get("available") and alert.deal_percentile is not None and alert.deal_percentile <= 25
+    if good and alert.triggered_at is None:
+        alert.triggered_at = _now()
+        alert.triggered_reason = "deal"
+
+
 def _refresh(alert: Alert) -> None:
     if alert.depart_date < datetime.now().date():
         return
-    price, _, _ = quote_parts(_alert_query(alert), alert.airline_code, alert.stops)
+    query = _alert_query(alert)
+    price, airline, _stops = quote_parts(query, alert.airline_code, alert.stops)
+    outbound, airline, _stops = sample_outbound(query, alert.airline_code, alert.stops)
     _apply_price(alert, price)
+    _watch_deal(alert, airline, outbound)
 
 
 def _public_alert(alert: Alert) -> dict:
@@ -74,6 +98,10 @@ def _public_alert(alert: Alert) -> dict:
         "airline_name": AIRLINES[alert.airline_code]["name"] if alert.airline_code in AIRLINES else None,
         "stops": alert.stops,
         "target_price": alert.target_price,
+        "deal_watch": bool(alert.deal_watch),
+        "deal_label": alert.deal_label,
+        "deal_percentile": alert.deal_percentile,
+        "triggered_reason": alert.triggered_reason,
         "last_price": alert.last_price,
         "email": alert.email,
         "active": alert.active,
@@ -102,10 +130,47 @@ def _sync_alerts(db: Session, query: TripQuery, price: int) -> None:
         if query.ret and alert.return_date != query.ret:
             continue
         if alert.airline_code or alert.stops is not None:
-            airline_price, _, _ = quote_parts(query, alert.airline_code, alert.stops)
+            airline_price, airline, _stops = quote_parts(query, alert.airline_code, alert.stops)
+            outbound, airline, _stops = sample_outbound(query, alert.airline_code, alert.stops)
             _apply_price(alert, airline_price)
         else:
-            _apply_price(alert, price)
+            airline_price = price
+            outbound, airline, _stops = sample_outbound(query)
+            _apply_price(alert, airline_price)
+        _watch_deal(alert, airline, outbound)
+
+
+@router.get("/model/metrics")
+def model_metrics():
+    from pathlib import Path
+    import json
+
+    from app.services.phase2 import PHASE2_DIR, VERSION
+
+    path = Path(PHASE2_DIR).parent / "phase2_metrics.json"
+    if not path.exists():
+        return {"available": False, "model_version": VERSION, "note": "Run python -m scripts.eval_phase2 to write holdout metrics."}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    comparison = data.get("comparison") or {}
+    return {
+        "available": True,
+        "model_version": data.get("version") or VERSION,
+        "source": data.get("source"),
+        "holdout": data.get("holdout"),
+        "train_periods": data.get("train_periods"),
+        "calibration_period": data.get("calibration_period"),
+        "comparison": comparison,
+        "formula_comparable": data.get("formula_comparable"),
+        "by_volume_tier": data.get("by_volume_tier"),
+        "limitations": [
+            "DB1B has no booking date, so this is not a forecast of a purchase.",
+            "Each row is a directional market. The file has no round-trip flag.",
+            "The quarterly file is a 10 percent sample.",
+            "The flight board is a simulation. On covered routes its base fare is the model median, then lead time, weekday, cabin, and a demand path are applied as assumptions.",
+            "Book or wait is a heuristic on that sample path.",
+            "A deal label compares a simulated or caller-supplied fare with real DOT tickets.",
+        ],
+    }
 
 
 @router.get("/health")
@@ -148,6 +213,18 @@ def search_flights(body: SearchRequest, db: Session = Depends(get_db)):
 @router.get("/fare-band")
 def fare_band(origin: str, destination: str):
     return paid_fare_band(origin, destination)
+
+
+@router.get("/deal-score")
+def score_deal(
+    origin: str,
+    destination: str,
+    airline: str,
+    quarter: int,
+    fare: float,
+    fare_kind: str = "sample",
+):
+    return deal_score(origin, destination, airline, quarter, fare, fare_kind)
 
 
 @router.get("/outlook")
@@ -220,7 +297,8 @@ def create_alert(body: AlertCreate, db: Session = Depends(get_db)):
         trip_type="oneway" if body.return_date is None else "round",
     )
     airline_code = (body.airline_code or "").strip().upper() or None
-    price, _, _ = quote_parts(query, airline_code, body.stops)
+    price, airline, _stops = quote_parts(query, airline_code, body.stops)
+    outbound, airline, _stops = sample_outbound(query, airline_code, body.stops)
     alert = Alert(
         origin=query.origin,
         destination=query.destination,
@@ -231,11 +309,13 @@ def create_alert(body: AlertCreate, db: Session = Depends(get_db)):
         airline_code=airline_code,
         stops=body.stops,
         target_price=body.target_price,
+        deal_watch=body.deal_watch,
         email=email,
         active=True,
         created_at=_now(),
     )
     _apply_price(alert, price)
+    _watch_deal(alert, airline, outbound)
     db.add(alert)
     db.commit()
     db.refresh(alert)

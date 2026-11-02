@@ -163,9 +163,21 @@ def _ensure_alert_columns() -> None:
                 connection.execute(text("ALTER TABLE alerts ADD COLUMN airline_code VARCHAR(4)"))
             if "stops" not in names:
                 connection.execute(text("ALTER TABLE alerts ADD COLUMN stops INTEGER"))
+            if "deal_watch" not in names:
+                connection.execute(text("ALTER TABLE alerts ADD COLUMN deal_watch BOOLEAN DEFAULT 0"))
+            if "deal_label" not in names:
+                connection.execute(text("ALTER TABLE alerts ADD COLUMN deal_label VARCHAR(16)"))
+            if "deal_percentile" not in names:
+                connection.execute(text("ALTER TABLE alerts ADD COLUMN deal_percentile INTEGER"))
+            if "triggered_reason" not in names:
+                connection.execute(text("ALTER TABLE alerts ADD COLUMN triggered_reason VARCHAR(16)"))
         else:
             connection.execute(text("ALTER TABLE alerts ADD COLUMN IF NOT EXISTS airline_code VARCHAR(4)"))
             connection.execute(text("ALTER TABLE alerts ADD COLUMN IF NOT EXISTS stops INTEGER"))
+            connection.execute(text("ALTER TABLE alerts ADD COLUMN IF NOT EXISTS deal_watch BOOLEAN DEFAULT FALSE"))
+            connection.execute(text("ALTER TABLE alerts ADD COLUMN IF NOT EXISTS deal_label VARCHAR(16)"))
+            connection.execute(text("ALTER TABLE alerts ADD COLUMN IF NOT EXISTS deal_percentile INTEGER"))
+            connection.execute(text("ALTER TABLE alerts ADD COLUMN IF NOT EXISTS triggered_reason VARCHAR(16)"))
 
 
 def init_db() -> None:

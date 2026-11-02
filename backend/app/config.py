@@ -14,6 +14,9 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://postgres:postgres@127.0.0.1:5432/flight_tracker"
     allow_sqlite_fallback: bool = True
+    llm_api_key: str = ""
+    llm_base_url: str = "https://api.openai.com/v1"
+    llm_model: str = "gpt-4o-mini"
 
 
 settings = Settings()

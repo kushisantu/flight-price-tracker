@@ -1,0 +1,19 @@
+{
+  "queries": 51,
+  "rules": {
+    "queries": 51,
+    "exact_match": 1.0,
+    "by_field": {
+      "origin": 1.0,
+      "destination": 1.0,
+      "trip_type": 1.0,
+      "passengers": 1.0,
+      "cabin": 1.0,
+      "max_price": 1.0
+    }
+  },
+  "rules_failed": 0,
+  "llm_ran": false,
+  "llm": null,
+  "rule_mismatches": []
+}

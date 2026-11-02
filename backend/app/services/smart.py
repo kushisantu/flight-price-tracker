@@ -39,6 +39,20 @@ MONTHS = {
 
 
 def parse_smart(text: str, fallback_origin: str | None, today: date | None = None) -> dict:
+    from app.services.llm_parse import interpret
+
+    try:
+        drafted = interpret(text, today or date.today())
+    except Exception:
+        drafted = None
+    if drafted is not None:
+        return drafted
+    result = parse_rules(text, fallback_origin, today)
+    result["parser"] = "rules"
+    return result
+
+
+def parse_rules(text: str, fallback_origin: str | None, today: date | None = None) -> dict:
     raw = " ".join((text or "").strip().split())
     if len(raw) < 3:
         raise ValueError('Try "New York to London in December under $700".')

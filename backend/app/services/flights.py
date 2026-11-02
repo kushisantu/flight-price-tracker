@@ -402,10 +402,11 @@ def _candidates(query: TripQuery) -> list[dict]:
                     if outbound is None:
                         continue
                     legs = [outbound]
-                    price = _unit_fare(
+                    outbound_price = _unit_fare(
                         origin["code"], dest["code"], airline["code"], stops, query.cabin,
                         query.depart.isoformat(), observed, query.passengers,
                     )
+                    price = outbound_price
                     if query.ret:
                         back_slot = (slot + 1) % 3
                         inbound = _leg(dest, origin, query.ret, airline, stops, back_slot, query.cabin)
@@ -416,9 +417,15 @@ def _candidates(query: TripQuery) -> list[dict]:
                             dest["code"], origin["code"], airline["code"], stops, query.cabin,
                             query.ret.isoformat(), observed, query.passengers,
                         )
+                    quarter = (query.depart.month - 1) // 3 + 1
+                    from app.services.deal import sample_anchor
+                    anchor = sample_anchor(origin["code"], dest["code"], airline["code"], quarter, stops)
                     flights.append({
                         "id": f"{origin['code']}-{dest['code']}-{query.depart.isoformat()}-{airline['code']}-{stops}-{slot}-{query.cabin}",
                         "price": price,
+                        "directional_price": outbound_price,
+                        "price_kind": "sample",
+                        "price_anchor": "dot_p50" if anchor is not None else "formula",
                         "total_price": price * query.passengers,
                         "airline_code": airline["code"],
                         "airline_name": airline["name"],
@@ -493,16 +500,15 @@ def _hub_code(airline_code: str, origin_code: str, dest_code: str) -> str | None
     return None if hub is None else hub["code"]
 
 
-def quote_parts(query: TripQuery, airline_code: str | None = None, stops: int | None = None) -> tuple[int, str, int]:
-    """Cheapest per-person fare without building flight times."""
+def _best_quote(query: TripQuery, airline_code: str | None = None, stops: int | None = None) -> tuple[int, str, int, int]:
+    """Cheapest sample fare, plus the outbound portion of that same itinerary."""
     _validate(query)
     observed = query.observed.isoformat()
-    best: tuple[int, str, int] | None = None
+    best: tuple[int, str, int, int] | None = None
     for origin in _airports(query.origin):
         for dest in _airports(query.destination):
             if origin["code"] == dest["code"]:
                 continue
-            direct = distance_km(origin, dest)
             for code in _carrier_codes(origin["code"], dest["code"]):
                 if airline_code and code != airline_code:
                     continue
@@ -514,20 +520,33 @@ def quote_parts(query: TripQuery, airline_code: str | None = None, stops: int | 
                 for stop_count in choices:
                     if stops is not None and stop_count != stops:
                         continue
-                    price = _unit_fare(
+                    outbound = _unit_fare(
                         origin["code"], dest["code"], code, stop_count, query.cabin,
                         query.depart.isoformat(), observed, query.passengers,
                     )
+                    price = outbound
                     if query.ret:
                         price += _unit_fare(
                             dest["code"], origin["code"], code, stop_count, query.cabin,
                             query.ret.isoformat(), observed, query.passengers,
                         )
                     if best is None or price < best[0] or (price == best[0] and stop_count < best[2]):
-                        best = (price, code, stop_count)
+                        best = (price, code, stop_count, outbound)
     if best is None:
         raise ValueError("No fares are available for that route.")
     return best
+
+
+def quote_parts(query: TripQuery, airline_code: str | None = None, stops: int | None = None) -> tuple[int, str, int]:
+    """Cheapest per-person fare without building flight times."""
+    price, code, stop_count, _outbound = _best_quote(query, airline_code, stops)
+    return price, code, stop_count
+
+
+def sample_outbound(query: TripQuery, airline_code: str | None = None, stops: int | None = None) -> tuple[int, str, int]:
+    """Outbound sample fare for the cheapest itinerary. This is still a simulated price."""
+    _price, code, stop_count, outbound = _best_quote(query, airline_code, stops)
+    return outbound, code, stop_count
 
 
 def search(data: dict) -> dict:
@@ -544,6 +563,11 @@ def search(data: dict) -> dict:
         "date_strip": strip,
         "history": history,
         "insight": build_insight(query, history, strip),
+        "sample_assumptions": [
+            "Where this route is in the DOT sample, the sample base fare is the model median for that airline, quarter, and stops.",
+            "Lead time, weekday, cabin, party size, and the demand path are assumptions. DB1B does not record them.",
+            "Book or wait follows the sample path. It is a heuristic, not a model trained on booking dates.",
+        ],
     }
 
 

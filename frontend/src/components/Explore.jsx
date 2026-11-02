@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { formatLong, money } from "../format";
-import FareBand from "./FareBand";
+import FareBand, { useFareBand } from "./FareBand";
 import PriceChart from "./PriceChart";
 import SearchForm from "./SearchForm";
 
@@ -35,6 +35,7 @@ export default function Explore({ criteria, onChange, onSearch, busy, onSmart })
   const [outlook, setOutlook] = useState(null);
   const [smartText, setSmartText] = useState("");
   const [smartError, setSmartError] = useState("");
+  const band = useFareBand(criteria.origin?.code, criteria.destination?.code);
 
   useEffect(() => {
     let ignore = false;
@@ -121,8 +122,11 @@ export default function Explore({ criteria, onChange, onSearch, busy, onSmart })
             <h2>Price history</h2>
             <p>{criteria.origin.city} to {criteria.destination.city}</p>
           </div>
-          <PriceChart history={outlook?.history} />
-          <p className="fine">Sample fare for these dates over the last 90 days, not a DOT ticket. The dashed line is the average.</p>
+          <PriceChart history={outlook?.history} band={band?.available ? band : null} />
+          <p className="fine">
+            The line is the sample fare for these dates over the last 90 days, not a DOT ticket. The dashed line is the average.
+            {band?.available ? " The shade is what travelers actually paid on this route (US DOT sample), one way." : ""}
+          </p>
         </div>
         <aside className={`insight ${insight?.level || ""}`}>
           {insight ? (
@@ -152,7 +156,7 @@ export default function Explore({ criteria, onChange, onSearch, busy, onSmart })
         </aside>
       </section>
 
-      <FareBand origin={criteria.origin?.code} destination={criteria.destination?.code} />
+      <FareBand band={band ?? null} origin={criteria.origin?.code} destination={criteria.destination?.code} />
 
       <section>
         <div className="panel-head">

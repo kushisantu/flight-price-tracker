@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
+import About from "./components/About";
 import Alerts from "./components/Alerts";
 import Explore from "./components/Explore";
 import Results from "./components/Results";
@@ -68,7 +69,8 @@ export default function App() {
     await api.createAlert(body);
     const data = await api.alerts();
     setAlertCount(data.alerts.length);
-    setToast(`Alert set for ${money(body.target_price)} per person`);
+    const dealNote = body.deal_watch ? " It also watches for a Good deal or better on the simulated outbound fare." : "";
+    setToast(`Alert set for ${money(body.target_price)} per person.${dealNote}`);
   }
 
   const offline = health?.status === "down";
@@ -86,6 +88,9 @@ export default function App() {
           </button>
           <button type="button" className={view === "alerts" ? "nav on" : "nav"} onClick={() => setView("alerts")}>
             Alerts {alertCount > 0 && <span className="count">{alertCount}</span>}
+          </button>
+          <button type="button" className={view === "about" ? "nav on" : "nav"} onClick={() => setView("about")}>
+            About
           </button>
         </nav>
       </header>
@@ -110,6 +115,7 @@ export default function App() {
             onCreateAlert={createAlert}
           />
         )}
+        {view === "about" && <About />}
         {view === "alerts" && (
           <Alerts
             onCount={setAlertCount}

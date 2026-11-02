@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { money } from "../format";
 
-export default function FareBand({ origin, destination }) {
+export function useFareBand(origin, destination) {
   const [band, setBand] = useState(undefined);
 
   useEffect(() => {
@@ -24,24 +24,32 @@ export default function FareBand({ origin, destination }) {
     };
   }, [origin, destination]);
 
-  if (band === undefined || band === null) return null;
+  return band;
+}
+
+export default function FareBand({ origin, destination, band }) {
+  const managed = band === undefined;
+  const loaded = useFareBand(managed ? origin : "", managed ? destination : "");
+  const shown = managed ? loaded : band;
+
+  if (shown === undefined || shown === null) return null;
 
   return (
     <section className="fare-band">
       <p className="level">
-        {band.confidence === "low" ? "Low confidence" : band.estimate === "model" ? "US DOT model" : "US DOT tickets"}
+        {shown.confidence === "low" ? "Low confidence" : shown.estimate === "model" ? "US DOT model" : "US DOT tickets"}
       </p>
-      {band.available ? (
+      {shown.available ? (
         <>
           <h2>
-            {band.estimate === "model"
-              ? <>Paid-fare model range for this route is {money(band.low)}–{money(band.high)}.</>
-              : <>Real tickets for this route usually paid {money(band.low)}–{money(band.high)}.</>}
+            {shown.estimate === "model"
+              ? <>Paid-fare model range for this route is {money(shown.low)}–{money(shown.high)}.</>
+              : <>Real tickets for this route usually paid {money(shown.low)}–{money(shown.high)}.</>}
           </h2>
-          <p className="fine">{band.note}</p>
+          <p className="fine">{shown.note}</p>
         </>
       ) : (
-        <p>{band.note}</p>
+        <p>{shown.note}</p>
       )}
     </section>
   );

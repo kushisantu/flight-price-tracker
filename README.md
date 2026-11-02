@@ -2,7 +2,7 @@
 
 A flight search board in the style of Google Flights. Compare fares across airlines and dates, read a price history chart, and set an alert when the fare hits your number.
 
-The React app talks to a FastAPI service. The flight board uses a sample fare model (distance, season, weekday, cabin, and how far out you book) so the same search always returns the same number. Those sample prices are saved in PostgreSQL, which is what the charts and alerts read back. Docker and AWS are not part of this local setup.
+The React app talks to a FastAPI service. The flight board is a simulation. On routes the DOT sample covers, its base fare is the model median; lead time, weekday, cabin, party size, and a demand path stay as documented assumptions. The same search still returns the same number. Those sample prices are saved in PostgreSQL, which is what the charts and alerts read back. Docker and AWS are not part of this local setup.
 
 Next to that, US DOT DB1B tickets supply a paid-fare range from a LightGBM quantile model. The model is trained on earlier quarters and conformal-adjusted on a later quarter. It is not a booking-date forecast. The sample board stays labeled as a sample. If a route has no training tickets, the API and the page say the DOT sample does not cover it.
 
@@ -15,8 +15,9 @@ Fares on the flight board are sample data for planning. They are not live airlin
 - Scan a date strip and a month calendar colored from cheaper to pricier
 - Read a Chart.js history of the cheapest fare, plus a short “book or wait” note
 - Type a trip in plain language, such as `New York to London in December under $700`
-- Save a price alert and see whether the current fare is under your target
+- Save a price alert, including a watch for a Good deal or better on the simulated outbound fare
 - Read a DOT paid-fare range for routes in the ticket sample, including a low-confidence flag when the route is thin
+- Open About for the model version, holdout numbers, and limitations
 
 ## Paid fares from DOT
 
@@ -50,7 +51,42 @@ The model’s 10–90 band covered 78.7% of those tickets before the conformal s
 
 Coverage stays near 80% on thick and thin routes. The median error is higher below 50 training passengers ($125.38), which is why those routes are labeled low confidence.
 
-Limitations: DB1B has no booking date, so this is not a forecast of a purchase. Each row is a directional market, and the file has no round-trip flag. The quarterly file is a 10% sample. The sample flight board does not invent itineraries for airports outside its original list.
+`GET /api/deal-score` places a fare in that distribution. A percentile at or below 10 is Great, at or below 25 is Good, at or below 75 is Typical, and above 75 is High. The results list scores the outbound sample fare, and the chart shades the one-way DOT band behind the sample line. Both say the sample price is simulated and the band is real DOT tickets.
+
+`GET /api/model/metrics` returns the same holdout numbers for the About page.
+
+## How the pieces fit
+
+```text
+sample board  -> simulated itineraries (catalog airports only)
+               -> base fare = model p50 when the route has training tickets
+               -> otherwise the original formula
+DOT model     -> LightGBM quantiles, served only with real training tickets
+deal score    -> percentile of a simulated or supplied fare in that distribution
+parser        -> optional language model, then the rule parser if that fails
+alerts        -> target price, and optionally Good or better (percentile 25 or below)
+```
+
+Plain-language search calls an OpenAI-compatible chat endpoint when `LLM_API_KEY` is set (`LLM_BASE_URL` and `LLM_MODEL` are optional). The reply must validate as origin, destination, dates, passengers, cabin, and max price. Any failure uses the rule parser, and the response says which one ran. Score both with:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m scripts.eval_parser
+```
+
+With no key, that command scores the rule parser only and records that the language model was not called.
+
+## Limitations
+
+- DB1B has no booking date, so this is not a forecast of a purchase and book-or-wait is a heuristic on the sample path.
+- A learned book-or-wait model needs a dataset that records the booking date, or days until departure, on each ticket. DB1B only has the travel quarter and the fare paid.
+- Each row is a directional market. The extract has no round-trip flag.
+- The quarterly file is a 10 percent sample. The load keeps every airport that appears in the four Market files, including international pairs that actually have rows.
+- A route with no training tickets is uncovered. The API does not guess a fare for it.
+- The sample board builds itineraries only for its original catalog. Other DOT airports are named in search, and the page says the sample board does not include them.
+- Lead time, weekday, cabin, party size, and the demand path are assumptions layered on the median.
+- A deal alert compares the simulated outbound fare with real DOT quantiles. It does not mean that simulated fare was paid.
+- Without `LLM_API_KEY`, sentence search stays on the rule parser.
 
 ## Run it
 
@@ -108,7 +144,8 @@ backend/app/services/flights.py sample fare model, search, charts, deals
 backend/app/services/empirical.py earlier DOT percentile table
 backend/app/services/phase2.py LightGBM quantiles and conformal band
 backend/app/fare_model/phase2 saved boosters and MODEL_CARD.md
-backend/app/services/smart.py   plain-language search
+backend/app/services/smart.py   rule parser, with an optional model in front
+backend/app/services/llm_parse.py OpenAI-compatible parser client
 backend/app/routers/api.py      HTTP API
 frontend/src                    React UI and Chart.js
 ```
@@ -120,12 +157,14 @@ frontend/src                    React UI and Chart.js
 | GET | `/api/health` | Database in use, quote count, alert count |
 | GET | `/api/airports?q=` | Airports from the DOT extract, plus sample-board cities |
 | GET | `/api/fare-band?origin=&destination=` | Paid-fare range, or a not-covered response |
+| GET | `/api/deal-score?origin=&destination=&airline=&quarter=&fare=` | Percentile of a fare in the DOT distribution. `fare_kind=sample` marks a simulated price |
 | POST | `/api/search` | Flights, date strip, history, booking note |
 | GET | `/api/outlook` | History and booking note for a route |
 | GET | `/api/calendar` | Cheapest fare for each day in a month |
 | GET | `/api/deals?origin=` | Sample trips from a city |
-| POST | `/api/smart-search` | Turn a sentence into a search |
-| GET, POST | `/api/alerts` | List or create alerts |
+| GET | `/api/model/metrics` | Holdout metrics, version, and limitations |
+| POST | `/api/smart-search` | Turn a sentence into a search. `parser` is `llm` or `rules` |
+| GET, POST | `/api/alerts` | List or create alerts. `deal_watch` adds a Good-deal trigger |
 | DELETE | `/api/alerts/{id}` | Remove an alert |
 
 ## Ideas worth adding next
@@ -133,8 +172,8 @@ frontend/src                    React UI and Chart.js
 These are the upgrades that would make the product more useful. None of them are required to run what is here.
 
 1. **Live fares.** Create a free Amadeus test account and replace the sample fare model with their flight-offers search. The UI can stay as it is.
-2. **A real trip assistant.** The sentence search only understands a fixed set of phrases. A model API could handle “somewhere warm next month under $400” and explain the tradeoff.
+2. **A broader trip assistant.** The optional model parser fills a fixed trip schema and falls back to rules. Open prompts such as “somewhere warm next month” are still out of scope.
 3. **Email or text alerts.** Alerts are checked when you open the Alerts page or search that route. A scheduler plus Resend, SendGrid, or Twilio would message you when the fare actually drops.
 4. **Accounts.** Alerts are shared in one local database. Sign-in would keep each person’s watches separate.
-5. **A price forecast.** The chart already has 90 days of history. A small model could add “likely to rise this week” on top of the current book-or-wait note.
+5. **A booking-date forecast.** That needs a dataset with a lead-time column. The current book-or-wait note stays a heuristic.
 6. **Multi-city trips and a map.** Useful once live fares exist, so the extra clicks return real itineraries.

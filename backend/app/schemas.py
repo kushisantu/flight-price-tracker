@@ -18,6 +18,17 @@ class SearchRequest(BaseModel):
     cabin: Cabin = "economy"
 
 
+class ParsedTrip(BaseModel):
+    origin: str = Field(min_length=3, max_length=40)
+    destination: str = Field(min_length=3, max_length=40)
+    depart_date: date
+    return_date: date | None = None
+    trip_type: TripType = "round"
+    passengers: int = Field(default=1, ge=1, le=6)
+    cabin: Cabin = "economy"
+    max_price: int | None = Field(default=None, ge=20, le=20000)
+
+
 class SmartRequest(BaseModel):
     query: str = Field(min_length=3, max_length=240)
     origin: str | None = None
@@ -33,4 +44,5 @@ class AlertCreate(BaseModel):
     airline_code: str | None = None
     stops: int | None = Field(default=None, ge=0, le=2)
     target_price: int = Field(ge=20, le=20000)
+    deal_watch: bool = False
     email: str | None = None
